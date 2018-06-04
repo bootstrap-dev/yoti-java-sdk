@@ -1,12 +1,12 @@
 package com.yoti.api.client.spi.remote;
 
-import static javax.crypto.Cipher.DECRYPT_MODE;
-
 import static com.yoti.api.client.spi.remote.call.YotiConstants.ASYMMETRIC_CIPHER;
 import static com.yoti.api.client.spi.remote.call.YotiConstants.BOUNCY_CASTLE_PROVIDER;
 import static com.yoti.api.client.spi.remote.call.YotiConstants.DEFAULT_CHARSET;
 import static com.yoti.api.client.spi.remote.call.YotiConstants.SYMMETRIC_CIPHER;
 import static com.yoti.api.client.spi.remote.util.Validation.notNull;
+
+import static javax.crypto.Cipher.DECRYPT_MODE;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -23,11 +23,9 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
-
 import com.yoti.api.client.ActivityDetails;
 import com.yoti.api.client.ActivityFailureException;
 import com.yoti.api.client.AmlException;
@@ -40,13 +38,16 @@ import com.yoti.api.client.ProfileException;
 import com.yoti.api.client.YotiClient;
 import com.yoti.api.client.aml.AmlProfile;
 import com.yoti.api.client.aml.AmlResult;
+import com.yoti.api.client.qrcode.DynamicQRCode;
+import com.yoti.api.client.qrcode.DynamicScenario;
+import com.yoti.api.client.qrcode.QRCodeException;
 import com.yoti.api.client.spi.remote.call.ProfileService;
 import com.yoti.api.client.spi.remote.call.Receipt;
 import com.yoti.api.client.spi.remote.call.aml.RemoteAmlService;
+import com.yoti.api.client.spi.remote.call.qrcode.RemoteQrCodeService;
 import com.yoti.api.client.spi.remote.proto.AttrProto;
 import com.yoti.api.client.spi.remote.proto.AttributeListProto.AttributeList;
 import com.yoti.api.client.spi.remote.proto.EncryptedDataProto.EncryptedData;
-
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import org.bouncycastle.openssl.PEMException;
@@ -68,19 +69,22 @@ final class SecureYotiClient implements YotiClient {
     private final KeyPair keyPair;
     private final ProfileService profileService;
     private final RemoteAmlService remoteAmlService;
+    private final RemoteQrCodeService remoteQrCodeService;
 
     static {
         Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
     }
 
     SecureYotiClient(String applicationId,
-                     KeyPairSource kpSource,
-                     ProfileService profileService,
-                     RemoteAmlService remoteAmlService) throws InitialisationException {
+            KeyPairSource kpSource,
+            ProfileService profileService,
+            RemoteAmlService remoteAmlService,
+            RemoteQrCodeService remoteQrCodeService) throws InitialisationException {
         this.appId = notNull(applicationId, "Application id");
         this.keyPair = loadKeyPair(notNull(kpSource, "Key pair source"));
         this.profileService = notNull(profileService, "Profile service");
         this.remoteAmlService = notNull(remoteAmlService, "Aml service");
+        this.remoteQrCodeService = notNull(remoteQrCodeService, "QR Code service");
     }
 
     @Override
@@ -93,6 +97,12 @@ final class SecureYotiClient implements YotiClient {
     public AmlResult performAmlCheck(AmlProfile amlProfile) throws AmlException {
         LOG.debug("Performing aml check...");
         return remoteAmlService.performCheck(keyPair, appId, amlProfile);
+    }
+
+    @Override
+    public DynamicQRCode requestQRCode(DynamicScenario dynamicScenario) throws QRCodeException {
+        LOG.debug("Requesting a Dynamic QRCode...");
+        return remoteQrCodeService.requestDynamicQRCode(appId, keyPair, dynamicScenario);
     }
 
     private Receipt getReceipt(String encryptedConnectToken, KeyPair keyPair) throws ProfileException {
@@ -187,7 +197,6 @@ final class SecureYotiClient implements YotiClient {
         }
         return parsedAttributes;
     }
-
     
     private Profile createProfile(List<Attribute> attributeList) {
         return new SimpleProfile(attributeList);
@@ -265,4 +274,5 @@ final class SecureYotiClient implements YotiClient {
             return keyPair;
         }
     }
+
 }
